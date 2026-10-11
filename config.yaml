@@ -1,0 +1,50 @@
+ocr:
+  engine: rapidocr
+  tesseract_cmd: "C:/Program Files/Tesseract-OCR/tesseract.exe"
+  languages: "eng"
+  page1_dpi: 220
+  card_dpi: 180
+  psm_card: 6
+processing:
+  max_workers: 4
+  max_workers_limit: 6
+  rapidocr_workers: 2
+  rapidocr_intra_op_threads: 2
+  rapidocr_inter_op_threads: 1
+  first_voter_page: 2
+grid:
+  columns: 3
+  rows: 10
+  # Ratios for the card grid on voter pages. These are starting values for this
+  # family of electoral-roll PDFs; inspect debug crops if a PDF variant differs.
+  left_margin: 0.025
+  right_margin: 0.025
+  cards_top: 0.035
+  cards_bottom: 0.035
+  card_inner_padding_x: 0.008
+  card_inner_padding_y: 0.012
+validation:
+  expected_epic_regex: "[A-Z]{3}[0-9]{7}"
+  # The serial is printed near the right edge of the outlined box at upper left.
+  # Include the whole box with context; narrow crops clipped its glyphs.
+  serial_crop: [0.20, 0.02, 0.31, 0.15]
+  serial_crop_variants:
+    - [0.17, 0.02, 0.32, 0.15]
+    - [0.02, 0.02, 0.33, 0.15]
+  serial_extended_bottom: 0.28
+  serial_vertical_windows: [0.02, 0.04, 0.06, 0.08, 0.10, 0.12]
+  # Preserve the whitespace above the EPIC string; tight top crops lost glyph tops.
+  voter_id_crop: [0.68, 0.00, 0.995, 0.20]
+  gender_crop: [0.02, 0.49, 0.58, 0.66]
+  target_table:
+    dpi: 120
+    values_y: [0.80, 0.84]
+    columns:
+      starting_serial: [0.03, 0.123]
+      ending_serial: [0.123, 0.23]
+      male: [0.23, 0.407]
+      female: [0.407, 0.598]
+      third_gender: [0.598, 0.791]
+      total: [0.791, 0.98]
+diagnostics:
+  debug_dir: "data/card_debug"

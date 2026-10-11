@@ -1,0 +1,22 @@
+# Local Python environments and caches
+.venv/
+.venv*/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# OCR inputs, extracted voter data, generated workbooks, and debug crops
+data/
+*.pdf
+*.xlsx
+*.xls
+*.csv
+
+# Large local project archive and machine-specific files
+electoral_roll_ocr_complete_project.zip
+.env
+.env.*
+Thumbs.db
+Desktop.ini

@@ -4,14 +4,6 @@ A Python workflow for extracting voter-card fields from scanned electoral-roll P
 
 > **Important:** OCR output is not verified voter data. A populated cell or matching record count does not prove that an individual value is correct. Always review candidate values against the original PDF before relying on them.
 
-## Dashboard example
-
-The image below summarizes the nine-PDF RapidOCR run (parts 1–8 and 10; 6,212 extracted records). It reports field completeness and count reconciliation, not person-level accuracy.
-
-![Voter Roll OCR data analysis dashboard showing completeness and reconciliation across nine PDF and Excel files](docs/images/voter-roll-ocr-analysis.png)
-
-The dashboard shows that all 6,212 rows had a name, voter ID candidate, and house number; 6,201 had a serial number; and 6,163 had a relative name. It also flags the target-extraction issue in part 8 and gender-count differences in parts 3 and 10. These are completeness and reconciliation metrics only. They do not confirm that the values match each voter card.
-
 ## Architecture diagram
 
 ![Architecture diagram for the Electoral Roll OCR pipeline](docs/images/architecture.svg)

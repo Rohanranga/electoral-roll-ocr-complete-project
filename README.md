@@ -12,6 +12,18 @@ The image below summarizes the nine-PDF RapidOCR run (parts 1–8 and 10; 6,212 
 
 The dashboard shows that all 6,212 rows had a name, voter ID candidate, and house number; 6,201 had a serial number; and 6,163 had a relative name. It also flags the target-extraction issue in part 8 and gender-count differences in parts 3 and 10. These are completeness and reconciliation metrics only. They do not confirm that the values match each voter card.
 
+## Architecture diagram
+
+![Architecture diagram for the Electoral Roll OCR pipeline](docs/images/architecture.svg)
+
+The CLI is the entry point for single-PDF, folder, dual-engine, summary, comparison, and repair tasks. It loads `config.yaml` and handles each input PDF independently. The page-one and voter-card paths are separate because the first page contains the official count table while the later pages contain the voter cards.
+
+**Page-one target path:** Tesseract reads the starting and ending serials and the elector counts from cropped cells in the summary table. The repeated OCR reads and the selected target values are saved in `Target Evidence`. Those counts become reference values for reconciliation; they are not used to fill voter-card fields.
+
+**Voter-card path:** PyMuPDF renders the voter pages. The configured grid crops each card region, and ink/card-evidence checks screen out non-card regions. The selected card engine (RapidOCR with ONNX Runtime or Tesseract) supplies raw text to the field parser. The parser extracts labeled fields and records voter-ID/serial candidates and statuses. Raw text is kept so uncertain values can be inspected later.
+
+**Reconciliation and review:** The pipeline combines the extracted rows with page-one targets and checks total/gender counts, missing or duplicate serials, out-of-range serials, and missing fields. It writes one workbook after each PDF is completed. `summarize-folder` reports coverage and processing diagnostics; `compare-workbooks` and `process-both` expose engine differences; `repair-folder` applies explicit patterns to saved raw text to fill supported blanks. These tools help prioritize review but do not verify identities. A human must compare uncertain values with the corresponding card in the original PDF.
+
 ## How the workflow works
 
 1. **Collect input PDFs.** Place the electoral-roll PDFs in `data/input/`. Each PDF is processed independently; its official summary targets are read from its own first page.

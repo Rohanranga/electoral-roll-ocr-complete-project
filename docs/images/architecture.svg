@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Electoral Roll OCR project architecture</title>
+  <desc id="desc">PDF inputs and configuration feed a command-line orchestrator. The workflow reads page-one targets with Tesseract and processes voter pages through PyMuPDF, grid detection, a selected OCR engine, and field parsing. Candidate records and targets are reconciled into Excel workbooks for summary, comparison, and human review against the source PDF.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L11,6 L1,11 Z" fill="#52708f"/></marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7faff"/><stop offset="1" stop-color="#edf3fa"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#20334b" flood-opacity=".10"/></filter>
+    <style>
+      .title{font:700 32px 'Segoe UI',Arial,sans-serif;fill:#172b4d}.subtitle{font:16px 'Segoe UI',Arial,sans-serif;fill:#52657d}
+      .heading{font:700 18px 'Segoe UI',Arial,sans-serif;fill:#17365d}.body{font:15px 'Segoe UI',Arial,sans-serif;fill:#34465e}.small{font:13px 'Segoe UI',Arial,sans-serif;fill:#52657d}
+      .box{rx:16;stroke-width:2;filter:url(#shadow)}.connector{fill:none;stroke:#52708f;stroke-width:3;marker-end:url(#arrow)}.dash{stroke-dasharray:8 7}
+      .pill{rx:12;stroke:none}.pilltext{font:600 12px 'Segoe UI',Arial,sans-serif;fill:#fff;letter-spacing:.35px}
+    </style>
+  </defs>
+  <rect width="1600" height="1120" rx="24" fill="url(#bg)"/>
+  <rect x="24" y="24" width="1552" height="1072" rx="22" fill="none" stroke="#d4dfec" stroke-width="2"/>
+  <text x="64" y="78" class="title">Electoral Roll OCR · Processing Architecture</text>
+  <text x="64" y="108" class="subtitle">Traceable extraction pipeline — OCR values remain candidates until reviewed against the source PDF.</text>
+
+  <!-- Inputs and orchestration -->
+  <g>
+    <rect class="box" x="64" y="150" width="310" height="132" fill="#e8f2ff" stroke="#7ca8dc"/>
+    <rect class="pill" x="84" y="168" width="92" height="24" fill="#3976bd"/><text x="130" y="185" text-anchor="middle" class="pilltext">INPUT</text>
+    <text x="84" y="222" class="heading">Electoral roll PDFs</text>
+    <text x="84" y="248" class="body">One or more scanned roll files</text>
+    <text x="84" y="270" class="small">data/input/</text>
+
+    <rect class="box" x="470" y="150" width="360" height="132" fill="#edf7f0" stroke="#83b99a"/>
+    <rect class="pill" x="490" y="168" width="112" height="24" fill="#34875a"/><text x="546" y="185" text-anchor="middle" class="pilltext">ORCHESTRATE</text>
+    <text x="490" y="222" class="heading">CLI batch runner</text>
+    <text x="490" y="248" class="body">process · process-folder · process-both</text>
+    <text x="490" y="270" class="small">Handles each PDF independently</text>
+
+    <rect class="box" x="926" y="150" width="610" height="132" fill="#fff5df" stroke="#e2bd67"/>
+    <rect class="pill" x="946" y="168" width="108" height="24" fill="#b47a13"/><text x="1000" y="185" text-anchor="middle" class="pilltext">SETTINGS</text>
+    <text x="946" y="222" class="heading">config.yaml</text>
+    <text x="946" y="248" class="body">OCR engine · workers and ONNX threads · render DPI</text>
+    <text x="946" y="270" class="body">card grid · target-table and field crop coordinates</text>
+  </g>
+  <path class="connector" d="M374 216 H460"/><path class="connector" d="M926 216 H842"/>
+
+  <!-- Split branches -->
+  <path class="connector" d="M650 282 V318 H386 V340"/>
+  <path class="connector" d="M650 318 H1168 V340"/>
+  <text x="254" y="322" class="small">Page 1</text><text x="1035" y="322" class="small">Pages 2 onward</text>
+
+  <g>
+    <rect class="box" x="64" y="350" width="644" height="150" fill="#f1ecff" stroke="#a18ad9"/>
+    <rect class="pill" x="86" y="369" width="166" height="24" fill="#7052b3"/><text x="169" y="386" text-anchor="middle" class="pilltext">TARGET EXTRACTION</text>
+    <text x="86" y="426" class="heading">Read official summary table with Tesseract</text>
+    <text x="86" y="454" class="body">Start/end serial · male/female/third-gender · total</text>
+    <text x="86" y="481" class="small">Repeated crop reads and original candidates are saved as evidence.</text>
+
+    <rect class="box" x="892" y="350" width="644" height="150" fill="#e7f7f7" stroke="#75b9ba"/>
+    <rect class="pill" x="914" y="369" width="145" height="24" fill="#27888a"/><text x="986" y="386" text-anchor="middle" class="pilltext">CARD PREP</text>
+    <text x="914" y="426" class="heading">PyMuPDF renders voter pages</text>
+    <text x="914" y="454" class="body">Grid geometry crops card regions; ink and card evidence filter regions.</text>
+    <text x="914" y="481" class="small">Page diagnostics retain accepted cards and inked-slot counts.</text>
+  </g>
+
+  <!-- OCR and parsing -->
+  <path class="connector" d="M1214 500 V522 H1042 V538"/>
+  <path class="connector" d="M1214 522 H1386 V538"/>
+  <g>
+    <rect class="box" x="892" y="548" width="300" height="142" fill="#e9f2ff" stroke="#7ca8dc"/>
+    <rect class="pill" x="914" y="567" width="114" height="24" fill="#3976bd"/><text x="971" y="584" text-anchor="middle" class="pilltext">ENGINE A</text>
+    <text x="914" y="624" class="heading">RapidOCR</text>
+    <text x="914" y="650" class="body">CPU · ONNX Runtime</text>
+    <text x="914" y="675" class="small">Configured default</text>
+
+    <rect class="box" x="1236" y="548" width="300" height="142" fill="#f3edff" stroke="#a18ad9"/>
+    <rect class="pill" x="1258" y="567" width="114" height="24" fill="#7052b3"/><text x="1315" y="584" text-anchor="middle" class="pilltext">ENGINE B</text>
+    <text x="1258" y="624" class="heading">Tesseract</text>
+    <text x="1258" y="650" class="body">Alternative card OCR</text>
+    <text x="1258" y="675" class="small">Also used for page-one targets</text>
+
+    <rect class="box" x="464" y="548" width="354" height="142" fill="#fff5df" stroke="#e2bd67"/>
+    <rect class="pill" x="486" y="567" width="170" height="24" fill="#b47a13"/><text x="571" y="584" text-anchor="middle" class="pilltext">FIELD PARSING</text>
+    <text x="486" y="624" class="heading">Labeled fields &amp; candidates</text>
+    <text x="486" y="650" class="body">Name · relation · house · age · gender · voter ID</text>
+    <text x="486" y="675" class="small">Raw text and candidate/status evidence are retained.</text>
+  </g>
+  <path class="connector" d="M1042 690 V718 H840 V619 H828"/>
+  <path class="connector" d="M1386 690 V730 H850 V650 H828"/>
+  <path class="connector" d="M464 620 H400 V734"/>
+
+  <!-- Reconciliation and outputs -->
+  <g>
+    <rect class="box" x="64" y="744" width="754" height="164" fill="#eef5ff" stroke="#7ca8dc"/>
+    <rect class="pill" x="86" y="763" width="128" height="24" fill="#3976bd"/><text x="150" y="780" text-anchor="middle" class="pilltext">RECONCILE</text>
+    <text x="86" y="820" class="heading">Compare extracted candidates with page-one targets</text>
+    <text x="86" y="849" class="body">Record and gender totals · missing / duplicate / out-of-range serials</text>
+    <text x="86" y="878" class="small">A matching count is a consistency check, not proof of person-level accuracy.</text>
+
+    <rect class="box" x="892" y="744" width="644" height="164" fill="#edf7f0" stroke="#83b99a"/>
+    <rect class="pill" x="914" y="763" width="110" height="24" fill="#34875a"/><text x="969" y="780" text-anchor="middle" class="pilltext">EXCEL</text>
+    <text x="914" y="820" class="heading">One workbook per completed PDF</text>
+    <text x="914" y="849" class="body">Voters · Reconciliation Report · Review Required · Serial Review</text>
+    <text x="914" y="878" class="body">Page Diagnostics · Target Evidence</text>
+  </g>
+  <path class="connector" d="M386 500 V734"/>
+  <path class="connector" d="M818 826 H882"/>
+  <path class="connector" d="M1030 908 V930 H430 V940"/>
+  <path class="connector" d="M1390 908 V940"/>
+
+  <g>
+    <rect class="box" x="64" y="950" width="730" height="110" fill="#fff0ed" stroke="#df9a8c"/>
+    <rect class="pill" x="86" y="967" width="152" height="24" fill="#bc5948"/><text x="162" y="984" text-anchor="middle" class="pilltext">HUMAN REVIEW</text>
+    <text x="86" y="1022" class="heading">Check uncertain values against the source PDF</text>
+    <text x="86" y="1047" class="small">OCR candidates are never marked verified automatically.</text>
+
+    <rect class="box" x="892" y="950" width="644" height="110" fill="#f2f4f8" stroke="#aab6c5"/>
+    <rect class="pill" x="914" y="967" width="130" height="24" fill="#64758b"/><text x="979" y="984" text-anchor="middle" class="pilltext">OPTIONAL</text>
+    <text x="914" y="1022" class="heading">Summarize · compare · repair blanks</text>
+    <text x="914" y="1047" class="small">Dual-engine exports retain both reads and route disagreements to review.</text>
+  </g>
+</svg>

@@ -77,6 +77,15 @@ python -m app.cli process-folder --input-dir data/input --output-dir data/rapido
 python -m app.cli summarize-folder --output-dir data/rapidocr_run
 ```
 
+For a folder with many PDFs, work can instead be distributed across PDF workers. Each active PDF then uses one page worker, which keeps the number of live RapidOCR/ONNX engines bounded by the PDF-worker count. Start with two on a machine with enough memory and monitor RAM; more workers are not always faster.
+
+```powershell
+python -m app.cli process-folder --input-dir data/input --output-dir data/rapidocr_parallel --ocr-engine rapidocr --pdf-workers 2
+python -m app.cli summarize-folder --output-dir data/rapidocr_parallel
+```
+
+`--pdf-workers` and `--rapidocr-workers` are mutually exclusive. Use `--rapidocr-workers 2` to process two pages from one PDF at a time, or `--pdf-workers 2` to process two PDFs at a time. The default is one PDF at a time, with page-level concurrency controlled by `processing.rapidocr_workers`.
+
 For Tesseract card OCR, use a separate output directory:
 
 ```powershell
@@ -84,7 +93,7 @@ python -m app.cli process-folder --input-dir data/input --output-dir data/tesser
 python -m app.cli summarize-folder --output-dir data/tesseract_output
 ```
 
-The batch command processes PDFs in filename order. It prints page-level progress and a `Finished ...` message after each PDF is written. Run `summarize-folder` after files finish; if the batch is interrupted, only workbooks for already-completed PDFs are available.
+The batch command submits PDFs in filename order. With multiple PDF workers, workbooks finish in whichever order processing completes. It prints page-level progress and a `Finished ...` message after each PDF is written. Run `summarize-folder` after files finish; if the batch is interrupted, only workbooks for already-completed PDFs are available.
 
 To process one PDF or a page range:
 
@@ -100,6 +109,8 @@ To process every input PDF with both engines, then export an unfiltered side-by-
 ```powershell
 python -m app.cli process-both --input-dir data/input --output-dir data/both_engines --rapidocr-workers 2
 ```
+
+To process separate PDFs concurrently instead, use `--pdf-workers 2`; each active PDF uses one page worker while Tesseract and RapidOCR are run for that PDF.
 
 The output contains `tesseract/` and `rapidocr/` engine folders, `both_engines_unfiltered/`, and `final_candidates/`. The unfiltered workbook retains both engines' readings and raw OCR text. The candidate workbook includes the available engine readings, consensus-only values, and a review queue. Engine agreement is not proof of correctness.
 
@@ -152,7 +163,9 @@ Edit `config.yaml` to change:
 - `ocr.engine`: default voter-card engine (`rapidocr` or `tesseract`).
 - `ocr.tesseract_cmd`: local Tesseract executable path.
 - `ocr.page1_dpi` and `ocr.card_dpi`: page render resolutions.
-- `processing.max_workers`, `processing.max_workers_limit`, and `processing.rapidocr_workers`: page concurrency. More workers can increase memory use; tune on a small page sample first.
+- `processing.max_workers` and `processing.max_workers_limit`: Tesseract page concurrency and its upper bound.
+- `processing.rapidocr_workers`: RapidOCR page concurrency when processing one PDF at a time.
+- `processing.pdf_workers`: number of PDFs processed concurrently. Each active PDF uses one page worker to bound total engine instances.
 - `processing.rapidocr_intra_op_threads` and `processing.rapidocr_inter_op_threads`: ONNX Runtime threading.
 - `grid`: card grid columns, rows, margins, and inner padding. The supplied PDF family uses a three-column, ten-row grid; different layouts need recalibration.
 - `validation`: voter-ID/gender/serial crops and page-one target-table crop coordinates.

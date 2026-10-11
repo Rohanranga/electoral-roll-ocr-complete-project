@@ -1,4 +1,5 @@
-import argparse, os, yaml
+import argparse, yaml
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from pathlib import Path
 from openpyxl import load_workbook
@@ -21,6 +22,20 @@ def process_one(pdf_path, output_path, cfg, start_page=None, end_page=None):
         print(f" - {r['check']}: target={r['target']} actual={r['actual']} status={r['status']}")
     return rows,report
 
+def run_parallel_jobs(items, worker, max_workers):
+    """Run independent PDFs concurrently and report each result as it finishes."""
+    if max_workers <= 1:
+        for item in items:
+            try: worker(item)
+            except Exception as e: print(f"FAILED {Path(item).name}: {e}",flush=True)
+        return
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures={pool.submit(worker,item):item for item in items}
+        for future in as_completed(futures):
+            item=futures[future]
+            try: future.result()
+            except Exception as e: print(f"FAILED {Path(item).name}: {e}",flush=True)
+
 def main():
     p=argparse.ArgumentParser(description="Electoral roll OCR with page-1 target reconciliation")
     sub=p.add_subparsers(dest="cmd",required=True)
@@ -36,7 +51,9 @@ def main():
     batch.add_argument("--output-dir",default="data/output")
     batch.add_argument("--config",default="config.yaml")
     batch.add_argument("--ocr-engine",choices=("tesseract","rapidocr"),default=None)
-    batch.add_argument("--rapidocr-workers",type=int,default=None,help="Override processing.rapidocr_workers for this run")
+    batch_workers=batch.add_mutually_exclusive_group()
+    batch_workers.add_argument("--rapidocr-workers",type=int,default=None,help="Parallel voter pages within one PDF (RapidOCR only)")
+    batch_workers.add_argument("--pdf-workers",type=int,default=None,help="Process multiple PDFs concurrently; each PDF uses one page worker")
     summary=sub.add_parser("summarize-folder",help="Summarize completed OCR workbooks for evaluation")
     summary.add_argument("--output-dir",default="data/output")
     repair=sub.add_parser("repair-folder",help="Fill only missing fields in existing OCR workbooks using saved raw OCR text")
@@ -50,7 +67,9 @@ def main():
     both.add_argument("--input-dir",default="data/input")
     both.add_argument("--output-dir",default="data/both_engines")
     both.add_argument("--config",default="config.yaml")
-    both.add_argument("--rapidocr-workers",type=int,default=None,help="Override processing.rapidocr_workers for this run")
+    both_workers=both.add_mutually_exclusive_group()
+    both_workers.add_argument("--rapidocr-workers",type=int,default=None,help="Parallel voter pages within one PDF (RapidOCR only)")
+    both_workers.add_argument("--pdf-workers",type=int,default=None,help="Process multiple PDFs concurrently; each PDF uses one page worker")
     combine=sub.add_parser("combine-engines",help="Combine existing engine workbooks into unfiltered and consensus-review files")
     combine.add_argument("--tesseract-dir",required=True)
     combine.add_argument("--rapidocr-dir",required=True)
@@ -155,21 +174,30 @@ def main():
     cfg=yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     configure_tesseract(cfg["ocr"].get("tesseract_cmd"))
     if getattr(args,"ocr_engine",None): cfg["ocr"]["engine"]=args.ocr_engine
-    if args.cmd=="process-folder" and args.rapidocr_workers is not None:
+    if args.cmd in ("process-folder","process-both") and args.rapidocr_workers is not None:
         cfg["processing"]["rapidocr_workers"]=max(1,args.rapidocr_workers)
+    if args.cmd in ("process-folder","process-both") and args.pdf_workers is not None:
+        cfg["processing"]["pdf_workers"]=max(1,args.pdf_workers)
     if args.cmd=="process-both":
         indir=Path(args.input_dir); root=Path(args.output_dir)
         if not indir.exists(): raise FileNotFoundError(f"Input folder not found: {indir}")
         pdfs=sorted(x for x in indir.iterdir() if x.is_file() and x.suffix.lower()==".pdf")
         if not pdfs: raise FileNotFoundError(f"No PDF files found in {indir}")
-        if args.rapidocr_workers is not None:
-            cfg["processing"]["rapidocr_workers"]=max(1,args.rapidocr_workers)
         tess_dir=root/"tesseract"; rapid_dir=root/"rapidocr"
         all_dir=root/"both_engines_unfiltered"; settled_dir=root/"final_candidates"
-        for pdf in pdfs:
+        pdf_workers=max(1,min(int(cfg["processing"].get("pdf_workers",1)),len(pdfs)))
+        job_cfg=deepcopy(cfg)
+        if pdf_workers>1:
+            # Keep total OCR engine instances bounded by the number of files
+            # being processed instead of nesting page and PDF worker pools.
+            job_cfg["processing"]["max_workers"]=1
+            job_cfg["processing"]["max_workers_limit"]=1
+            job_cfg["processing"]["rapidocr_workers"]=1
+        if pdf_workers>1: print(f"Processing {len(pdfs)} PDFs with {pdf_workers} PDF workers and one page worker per PDF",flush=True)
+        def process_both_pdf(pdf):
             outputs={}
             for engine,folder in (("tesseract",tess_dir),("rapidocr",rapid_dir)):
-                engine_cfg=deepcopy(cfg); engine_cfg["ocr"]["engine"]=engine
+                engine_cfg=deepcopy(job_cfg); engine_cfg["ocr"]["engine"]=engine
                 out=folder/(pdf.stem+"_ocr.xlsx")
                 process_one(str(pdf),str(out),engine_cfg)
                 outputs[engine]=out
@@ -177,6 +205,7 @@ def main():
             consensus_path=settled_dir/(pdf.stem+"_final_candidates.xlsx")
             records,review_count=build_dual_outputs(outputs["tesseract"],outputs["rapidocr"],all_path,consensus_path)
             print(f"Combined {records} card positions; {review_count} field items require source review",flush=True)
+        run_parallel_jobs(pdfs,process_both_pdf,pdf_workers)
         return
     if args.cmd=="process":
         if not Path(args.pdf).exists(): raise FileNotFoundError(args.pdf)
@@ -187,11 +216,20 @@ def main():
         pdfs=sorted([x for x in indir.iterdir() if x.is_file() and x.suffix.lower()==".pdf"])
         if not pdfs: raise FileNotFoundError(f"No PDF files found in {indir}")
         outdir.mkdir(parents=True,exist_ok=True)
+        pdf_workers=max(1,min(int(cfg["processing"].get("pdf_workers",1)),len(pdfs)))
+        job_cfg=deepcopy(cfg)
+        if pdf_workers>1:
+            # Bound RapidOCR's ONNX sessions and avoid nested oversubscription.
+            job_cfg["processing"]["max_workers"]=1
+            job_cfg["processing"]["max_workers_limit"]=1
+            job_cfg["processing"]["rapidocr_workers"]=1
+            print(f"Processing {len(pdfs)} PDFs with {pdf_workers} PDF workers and one page worker per PDF",flush=True)
         if args.ocr_engine == "rapidocr" or cfg["ocr"].get("engine","tesseract").lower()=="rapidocr":
-            print(f"RapidOCR workers configured: {cfg['processing'].get('rapidocr_workers', cfg['processing'].get('max_workers', 1))}; intra/inter-op threads: {cfg['processing'].get('rapidocr_intra_op_threads',2)}/{cfg['processing'].get('rapidocr_inter_op_threads',1)}",flush=True)
+            if pdf_workers==1:
+                print(f"RapidOCR page workers: {job_cfg['processing'].get('rapidocr_workers', job_cfg['processing'].get('max_workers', 1))}; intra/inter-op threads: {job_cfg['processing'].get('rapidocr_intra_op_threads',2)}/{job_cfg['processing'].get('rapidocr_inter_op_threads',1)}",flush=True)
         print(f"Found {len(pdfs)} PDFs. Each PDF will read its own target from page 1.",flush=True)
-        for pdf in pdfs:
+        def process_folder_pdf(pdf):
             out=outdir/(pdf.stem+"_ocr.xlsx")
-            try: process_one(str(pdf),str(out),cfg)
-            except Exception as e: print(f"FAILED {pdf.name}: {e}",flush=True)
+            process_one(str(pdf),str(out),job_cfg)
+        run_parallel_jobs(pdfs,process_folder_pdf,pdf_workers)
 if __name__=="__main__": main()

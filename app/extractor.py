@@ -1,16 +1,16 @@
 """Traceable electoral-roll extraction. OCR values remain candidates until reviewed."""
 import re, time
 from collections import Counter
-from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pymupdf
-from PIL import Image, ImageChops
+from PIL import Image
 from .ocr import ocr_image, rapidocr_image, parse_fields, epic_candidates, select_voter_id, serial_header_candidate
 
 def render_page(pdf_path, page_no, dpi):
     with pymupdf.open(pdf_path) as doc:
-        pix=doc[page_no-1].get_pixmap(matrix=pymupdf.Matrix(dpi/72,dpi/72),alpha=False)
-    return Image.open(BytesIO(pix.tobytes('png'))).convert('RGB')
+        pix=doc[page_no-1].get_pixmap(matrix=pymupdf.Matrix(dpi/72,dpi/72),colorspace=pymupdf.csRGB,alpha=False)
+    # Avoid encoding every rendered page as PNG only to decode it back into PIL.
+    return Image.frombytes('RGB',(pix.width,pix.height),pix.samples)
 
 def extract_targets(pdf_path,cfg):
     im=render_page(pdf_path,1,int(cfg['ocr']['page1_dpi']))

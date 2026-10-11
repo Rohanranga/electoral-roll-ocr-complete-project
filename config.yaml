@@ -9,6 +9,7 @@ processing:
   max_workers: 4
   max_workers_limit: 6
   rapidocr_workers: 2
+  pdf_workers: 1
   rapidocr_intra_op_threads: 2
   rapidocr_inter_op_threads: 1
   first_voter_page: 2

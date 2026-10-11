@@ -8,7 +8,13 @@ __pycache__/
 .mypy_cache/
 
 # OCR inputs, extracted voter data, generated workbooks, and debug crops
-data/
+data/*
+!data/input/
+!data/output/
+data/input/*
+!data/input/.gitkeep
+data/output/*
+!data/output/.gitkeep
 *.pdf
 *.xlsx
 *.xls

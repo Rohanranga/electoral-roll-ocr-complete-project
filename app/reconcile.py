@@ -1,5 +1,6 @@
 from collections import Counter
 from pathlib import Path
+import os
 from openpyxl import Workbook
 from openpyxl.styles import Font,PatternFill,Alignment
 from openpyxl.utils import get_column_letter
@@ -27,9 +28,23 @@ def reconcile(rows,targets):
 
 def write_workbook(out_path,rows,targets,report,duplicates,missing,dup_ids=(),diagnostics=(),out_of_range=()):
     wb=Workbook(); ws=wb.active;ws.title='Voters'
-    fields=['pdf_page','grid_row','grid_col','card_box_px','serial_no','serial_status','serial_candidates','voter_id','voter_id_status','voter_id_selection','voter_id_candidates','voter_id_raw','name','relation_type','relation_name','house_no','age','gender','gender_candidates','gender_raw','raw_text']
+    fields=['pdf_page','grid_row','grid_col','card_box_px','source_image','serial_no','serial_status','serial_candidates','voter_id','voter_id_status','voter_id_selection','voter_id_candidates','voter_id_raw','name','relation_type','relation_name','house_no','age','gender','gender_candidates','gender_raw','raw_text']
     ws.append(fields)
     for r in rows:ws.append([r.get(k) for k in fields])
+    def add_image_links(sheet):
+        image_col=fields.index('source_image')+1
+        for row_index, record in enumerate(rows,start=2):
+            image_path=record.get('source_image')
+            cell=sheet.cell(row_index,image_col)
+            if image_path:
+                try:
+                    cell.hyperlink=os.path.relpath(Path(image_path).resolve(),Path(out_path).resolve().parent).replace(os.sep,'/')
+                    cell.value='Open card image'
+                    cell.style='Hyperlink'
+                except (OSError, ValueError):
+                    # Keep the saved path visible if it cannot be made relative.
+                    cell.value=image_path
+    add_image_links(ws)
     q=wb.create_sheet('Reconciliation Report');q.append(['Check','Target','Actual','Difference','Status'])
     for r in report:q.append([r['check'],r['target'],r['actual'],r['difference'],r['status']])
     sr=wb.create_sheet('Serial Review');sr.append(['Issue','Value','PDF page','Grid row','Grid column'])
@@ -55,6 +70,19 @@ def write_workbook(out_path,rows,targets,report,duplicates,missing,dup_ids=(),di
         if (any(not r.get(k) for k in ('serial_no','voter_id','name','age','gender')) or
             r.get('serial_status')!='VERIFIED' or r.get('voter_id_status')!='VERIFIED'):
             rv.append([r.get(k) for k in fields])
+    # Review rows are a subset, so use the saved image path in each row to
+    # create the same relative hyperlink without depending on row ordering.
+    image_col=fields.index('source_image')+1
+    for row_index in range(2,rv.max_row+1):
+        cell=rv.cell(row_index,image_col)
+        image_path=cell.value
+        if image_path:
+            try:
+                cell.hyperlink=os.path.relpath(Path(image_path).resolve(),Path(out_path).resolve().parent).replace(os.sep,'/')
+                cell.value='Open card image'
+                cell.style='Hyperlink'
+            except (OSError, ValueError):
+                pass
     pg=wb.create_sheet('Page Diagnostics');pg.append(['Page','Voter cards accepted','Inked grid slots','Failed field count','Processing error','Duration seconds'])
     for d in diagnostics:pg.append([d['page'],d['detected'],d.get('grid_candidates',d['detected']),d['failed_fields'],d['error'],d['duration_seconds']])
     ev=wb.create_sheet('Target Evidence');ev.append(['Field','Value'])

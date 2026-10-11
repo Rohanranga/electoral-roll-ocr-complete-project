@@ -210,11 +210,13 @@ def process_page(args):
         rec={'pdf_page':page_no,'grid_row':row,'grid_col':col,'voter_id_raw':idtxt,'raw_text':raw,'card_box_px':str(box),**fields,
              'voter_id':voter_id,'voter_id_status':id_status,'voter_id_selection':id_selection,'voter_id_candidates':'; '.join(id_candidates),
              'serial_no':serial,'serial_status':serial_status,'serial_candidates':serial_candidates}
-        out.append(rec)
         if debug:
             from pathlib import Path
             p=Path(debug);p.mkdir(parents=True,exist_ok=True)
-            card.save(p/f'{Path(pdf_path).stem}_p{page_no:03d}_r{row:02d}_c{col:02d}.png')
+            image_path=p/f'{Path(pdf_path).stem}_p{page_no:03d}_r{row:02d}_c{col:02d}.png'
+            card.save(image_path)
+            rec['source_image']=str(image_path.resolve())
+        out.append(rec)
     return {'page':page_no,'rows':out,'detected':len(out),'grid_candidates':grid_candidates,'errors':'','duration':time.perf_counter()-started}
 
 def extract_all(pdf_path,cfg,start_page=None,end_page=None):

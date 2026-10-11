@@ -9,6 +9,10 @@ from .reconcile import reconcile, write_workbook
 from .compare import compare_workbooks, build_dual_outputs
 
 def process_one(pdf_path, output_path, cfg, start_page=None, end_page=None):
+    cfg=deepcopy(cfg)
+    cfg.setdefault("diagnostics", {})["debug_dir"] = str(
+        Path(output_path).resolve().parent / f"{Path(output_path).stem}_images"
+    )
     targets=extract_targets(str(pdf_path),cfg)
     print(f"\n=== {Path(pdf_path).name} ===",flush=True)
     print("Page 1 targets:",{k:v for k,v in targets.items() if k.startswith("target_")},flush=True)
@@ -133,8 +137,15 @@ def main():
         if not files: raise FileNotFoundError(f"No OCR workbooks found in {indir}")
         outdir.mkdir(parents=True,exist_ok=True)
         for path in files:
-            wb=load_workbook(path,read_only=True,data_only=True)
+            wb=load_workbook(path,data_only=True)
             voters=wb["Voters"]; header=next(voters.values); rows=[dict(zip(header,row)) for row in voters.iter_rows(min_row=2,values_only=True)]
+            if "source_image" in header:
+                image_col=header.index("source_image")+1
+                for row_index,row in enumerate(rows,start=2):
+                    link=voters.cell(row_index,image_col).hyperlink
+                    if link and link.target:
+                        target=Path(link.target)
+                        row["source_image"]=str(target if target.is_absolute() else (path.parent/target).resolve())
             targets={key:value for key,value in wb["Target Evidence"].iter_rows(min_row=2,values_only=True) if key and str(key).startswith("target_")}
             diag_sheet=wb["Page Diagnostics"]; dh=next(diag_sheet.values)
             diagnostics=[dict(zip(dh,row)) for row in diag_sheet.iter_rows(min_row=2,values_only=True)]

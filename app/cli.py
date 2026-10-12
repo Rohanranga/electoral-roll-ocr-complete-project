@@ -7,6 +7,7 @@ from .ocr import configure_tesseract, parse_fields, epic_candidates, select_vote
 from .extractor import extract_targets, extract_all
 from .reconcile import reconcile, write_workbook
 from .compare import compare_workbooks, build_dual_outputs
+from .dashboard import serve_dashboard
 
 def process_one(pdf_path, output_path, cfg, start_page=None, end_page=None):
     cfg=deepcopy(cfg)
@@ -60,6 +61,10 @@ def main():
     batch_workers.add_argument("--pdf-workers",type=int,default=None,help="Process multiple PDFs concurrently; each PDF uses one page worker")
     summary=sub.add_parser("summarize-folder",help="Summarize completed OCR workbooks for evaluation")
     summary.add_argument("--output-dir",default="data/output")
+    dashboard=sub.add_parser("dashboard",help="Open a local interactive OCR review dashboard with source-card images")
+    dashboard.add_argument("--workbook-dir",default="data/output",help="Folder containing *_ocr.xlsx workbooks and their _images folders")
+    dashboard.add_argument("--host",default="127.0.0.1",help="Local bind address (default: 127.0.0.1)")
+    dashboard.add_argument("--port",type=int,default=8765)
     repair=sub.add_parser("repair-folder",help="Fill only missing fields in existing OCR workbooks using saved raw OCR text")
     repair.add_argument("--input-dir",default="data/output")
     repair.add_argument("--output-dir",default="data/pattern_output")
@@ -79,6 +84,9 @@ def main():
     combine.add_argument("--rapidocr-dir",required=True)
     combine.add_argument("--output-dir",default="data/combined_engines")
     args=p.parse_args()
+    if args.cmd=="dashboard":
+        serve_dashboard(args.workbook_dir,args.host,args.port)
+        return
     if args.cmd=="compare-workbooks":
         records,differences=compare_workbooks(args.baseline,args.candidate,args.output)
         print(f"Compared {records} card positions; exported {differences} field differences to {args.output}")
